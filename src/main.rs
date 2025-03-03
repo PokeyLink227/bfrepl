@@ -5,7 +5,10 @@ use ratatui::{
     prelude::*,
     widgets::{Block, BorderType, Paragraph, Widget},
 };
-use std::io::{self};
+use std::{
+    fmt,
+    io::{self},
+};
 
 mod popup;
 mod theme;
@@ -36,6 +39,37 @@ enum Dialogue {
     NewTask,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ReplType {
+    Code,
+    Output,
+    Input,
+}
+
+impl fmt::Display for ReplType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Code => "   >",
+                Self::Output => "out>",
+                Self::Input => "in >",
+            }
+        )
+    }
+}
+
+impl ReplType {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Code => "   >",
+            Self::Output => "out>",
+            Self::Input => "in >",
+        }
+    }
+}
+
 struct Options {
     error_display_time: u32,
     refresh_rate: u32,
@@ -44,6 +78,7 @@ struct Options {
 pub struct App {
     mode: RunningMode,
     options: Options,
+    lines: Vec<ReplType>,
 
     command_field: TextEntry,
     error_str: String,
@@ -63,13 +98,21 @@ impl Widget for &App {
 
         self.render_title_bar(title_bar, buf);
 
-        Block::bordered()
-            .border_style(THEME.root)
-            .title("REPL")
-            .title_style(THEME.root)
-            .style(THEME.root)
-            .border_type(BorderType::Rounded)
-            .render(canvas, buf);
+        Paragraph::new(
+            self.lines
+                .iter()
+                .map(|l| Line::from(l.as_str()))
+                .collect::<Vec<Line>>(),
+        )
+        .block(
+            Block::bordered()
+                .border_style(THEME.root)
+                .title("REPL")
+                .title_style(THEME.root)
+                .style(THEME.root)
+                .border_type(BorderType::Rounded),
+        )
+        .render(canvas, buf);
 
         if self.mode == RunningMode::Command {
             Line::from(vec![
@@ -242,6 +285,7 @@ fn main() -> io::Result<()> {
             error_display_time: 2,
             refresh_rate: 60,
         },
+        lines: vec![ReplType::Code, ReplType::Code, ReplType::Output],
         command_field: TextEntry::default(),
         error_str: String::new(),
         frames_since_error: None,
