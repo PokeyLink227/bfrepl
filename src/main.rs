@@ -1,4 +1,4 @@
-use crate::{popup::*, theme::THEME, widgets::TextEntry};
+use crate::{interpreter::BFInt, popup::*, theme::THEME, widgets::TextEntry};
 use crossterm::event::{self, KeyCode};
 use ratatui::{
     layout::Offset,
@@ -10,6 +10,7 @@ use std::{
     io::{self},
 };
 
+mod interpreter;
 mod popup;
 mod theme;
 mod tui;
@@ -87,7 +88,7 @@ pub struct App {
     repl_mode: ReplMode,
     options: Options,
     lines: Vec<ReplType>,
-    program: String,
+    interp: BFInt,
 
     command_field: TextEntry,
     error_str: String,
@@ -130,7 +131,7 @@ impl Widget for &App {
         .render(repl_area, buf);
 
         // change to be slice of current program sized ot fit
-        Paragraph::new(self.program.as_str())
+        Paragraph::new(unsafe { String::from_utf8_unchecked(self.interp.prog.clone()) })
             .block(
                 Block::bordered()
                     .border_style(THEME.root)
@@ -140,8 +141,15 @@ impl Widget for &App {
                     .border_type(BorderType::Rounded),
             )
             .render(program_area, buf);
+        Span::from("^").render(
+            program_area.offset(Offset {
+                x: self.interp.prog_ptr as i32 + 1,
+                y: 2,
+            }),
+            buf,
+        );
 
-        Paragraph::new("0x00")
+        Paragraph::new(format!("{:?}", self.interp.mem))
             .block(
                 Block::bordered()
                     .border_style(THEME.root)
@@ -192,6 +200,9 @@ impl App {
         self.command_field.set_text("t load".to_string());
         self.process_command();
 
+        self.interp.mem[0] = 7;
+        self.interp.extend_prog(b"[->+<]");
+
         // main loop
         while self.running_mode != RunningMode::Exiting {
             terminal.draw(|frame| self.render_frame(frame))?;
@@ -227,6 +238,7 @@ impl App {
                     if !self.dispatch_input(key.code) {
                         match key.code {
                             KeyCode::Char('q') => self.try_quit(),
+                            KeyCode::Char('n') => self.interp.step(),
                             KeyCode::Char(':') => {
                                 self.mode = Mode::Command;
                                 self.frames_since_error = None;
@@ -342,7 +354,7 @@ fn main() -> io::Result<()> {
             refresh_rate: 60,
         },
         lines: vec![ReplType::Code, ReplType::Code, ReplType::Output],
-        program: "++<<[+++-->+++]".to_owned(),
+        interp: BFInt::new(),
         command_field: TextEntry::default(),
         error_str: String::new(),
         frames_since_error: None,
