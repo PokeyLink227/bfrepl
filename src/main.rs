@@ -24,13 +24,19 @@ pub enum CommandRequest {
 enum RunningMode {
     Running,
     Exiting,
-    Command,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Mode {
     Normal,
     Editing,
     Command,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ReplMode {
+    Running,
+    Paused,
 }
 
 enum Dialogue {
@@ -76,9 +82,12 @@ struct Options {
 }
 
 pub struct App {
-    mode: RunningMode,
+    mode: Mode,
+    running_mode: RunningMode,
+    repl_mode: ReplMode,
     options: Options,
     lines: Vec<ReplType>,
+    program: String,
 
     command_field: TextEntry,
     error_str: String,
@@ -90,9 +99,10 @@ impl Widget for &App {
         let vertical = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(1),
+            Constraint::Length(3),
             Constraint::Length(1),
         ]);
-        let [title_bar, canvas, bottom_bar] = vertical.areas(area);
+        let [title_bar, canvas, program_view, bottom_bar] = vertical.areas(area);
 
         //Block::new().style(THEME.root).render(area, buf);
 
@@ -114,7 +124,19 @@ impl Widget for &App {
         )
         .render(canvas, buf);
 
-        if self.mode == RunningMode::Command {
+        // change to be slice of current program sized ot fit
+        Paragraph::new(self.program.as_str())
+            .block(
+                Block::bordered()
+                    .border_style(THEME.root)
+                    .title("Program view")
+                    .title_style(THEME.root)
+                    .style(THEME.root)
+                    .border_type(BorderType::Rounded),
+            )
+            .render(program_view, buf);
+
+        if self.mode == Mode::Command {
             Line::from(vec![
                 Span::from(":"),
                 Span::from(self.command_field.get_str()),
@@ -144,7 +166,7 @@ impl App {
         self.process_command();
 
         // main loop
-        while self.mode != RunningMode::Exiting {
+        while self.running_mode != RunningMode::Exiting {
             terminal.draw(|frame| self.render_frame(frame))?;
             self.handle_events()?;
 
@@ -179,7 +201,7 @@ impl App {
                         match key.code {
                             KeyCode::Char('q') => self.try_quit(),
                             KeyCode::Char(':') => {
-                                self.mode = RunningMode::Command;
+                                self.mode = Mode::Command;
                                 self.frames_since_error = None;
                                 self.command_field.clear();
                             }
@@ -193,17 +215,17 @@ impl App {
     }
 
     fn dispatch_input(&mut self, key: KeyCode) -> bool {
-        if self.mode == RunningMode::Command {
+        if self.mode == Mode::Command {
             match key {
                 KeyCode::Char(c) => self.command_field.insert(c),
                 KeyCode::Backspace => self.command_field.remove(),
                 KeyCode::Enter => {
-                    self.mode = RunningMode::Running;
+                    self.mode = Mode::Normal;
                     self.process_command();
                     self.command_field.move_cursor_home();
                 }
                 KeyCode::Esc => {
-                    self.mode = RunningMode::Running;
+                    self.mode = Mode::Normal;
                     self.command_field.move_cursor_home();
                 }
                 KeyCode::Left => self.command_field.move_cursor_left(),
@@ -232,7 +254,7 @@ impl App {
     }
 
     fn force_quit(&mut self) {
-        self.mode = RunningMode::Exiting;
+        self.running_mode = RunningMode::Exiting;
     }
 
     fn try_quit(&mut self) {
@@ -242,19 +264,24 @@ impl App {
     fn render_title_bar(&self, area: Rect, buf: &mut Buffer) {
         let horizontal = Layout::horizontal([
             Constraint::Min(0),
-            Constraint::Length(7),
-            Constraint::Length(10),
             Constraint::Length(9),
             Constraint::Length(9),
         ]);
-        let [app_name, list_tab, calendar_tab, options_tab, profile_tab] = horizontal.areas(area);
+        let [app_name, editing_mode_area, repl_mode_area] = horizontal.areas(area);
 
-        Block::new().style(THEME.root).render(area, buf);
-        Paragraph::new("FrogPad").render(app_name, buf);
-        Paragraph::new(" Tasks ").render(list_tab, buf);
-        Paragraph::new(" Calendar ").render(calendar_tab, buf);
-        Paragraph::new(" Options ").render(options_tab, buf);
-        Paragraph::new(" Profile ").render(profile_tab, buf);
+        //Block::new().style(THEME.root).render(area, buf);
+        Paragraph::new("BFRepl").render(app_name, buf);
+        match self.mode {
+            Mode::Normal => Span::from(" Normal ").style(THEME.mode.normal),
+            Mode::Editing => Span::from(" Editing ").style(THEME.mode.editing),
+            Mode::Command => Span::from(" Command ").style(THEME.mode.command),
+        }
+        .render(editing_mode_area, buf);
+        match self.repl_mode {
+            ReplMode::Running => Span::from(" Running ").style(THEME.mode.editing),
+            ReplMode::Paused => Span::from(" Paused ").style(THEME.mode.normal),
+        }
+        .render(repl_mode_area, buf);
     }
 
     /*
@@ -280,12 +307,15 @@ impl App {
 fn main() -> io::Result<()> {
     let mut terminal = tui::init()?;
     let mut app = App {
-        mode: RunningMode::Running,
+        mode: Mode::Normal,
+        running_mode: RunningMode::Running,
+        repl_mode: ReplMode::Paused,
         options: Options {
             error_display_time: 2,
             refresh_rate: 60,
         },
         lines: vec![ReplType::Code, ReplType::Code, ReplType::Output],
+        program: "++<<[+++-->+++]".to_owned(),
         command_field: TextEntry::default(),
         error_str: String::new(),
         frames_since_error: None,

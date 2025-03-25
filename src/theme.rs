@@ -10,6 +10,13 @@ pub struct Theme {
     pub popup_selected: Style,
     pub key_bind: Style,
     pub key_desc: Style,
+    pub mode: ModeTheme,
+}
+
+pub struct ModeTheme {
+    pub normal: Style,
+    pub editing: Style,
+    pub command: Style,
 }
 
 pub const THEME: Theme = Theme {
@@ -21,6 +28,11 @@ pub const THEME: Theme = Theme {
     popup_selected: Style::new().fg(YELLOW).bg(DARK_GRAY),
     key_bind: Style::new().fg(BLACK).bg(DARK_GRAY),
     key_desc: Style::new().fg(DARK_GRAY).bg(BLACK),
+    mode: ModeTheme {
+        normal: Style::new().fg(WHITE).bg(BLUE_3),
+        editing: Style::new().fg(WHITE).bg(GREEN_1),
+        command: Style::new().fg(WHITE).bg(YELLOW),
+    },
 };
 
 const WHITE: Color = Color::Rgb(238, 238, 238);
