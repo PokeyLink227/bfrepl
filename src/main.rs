@@ -1,4 +1,9 @@
-use crate::{interpreter::BFInt, popup::*, theme::THEME, widgets::TextEntry};
+use crate::{
+    interpreter::{BFInt, InterpState},
+    popup::*,
+    theme::THEME,
+    widgets::TextEntry,
+};
 use crossterm::event::{self, KeyCode};
 use ratatui::{
     layout::Offset,
@@ -32,12 +37,6 @@ enum Mode {
     Normal,
     Editing,
     Command,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum ReplMode {
-    Running,
-    Paused,
 }
 
 enum Dialogue {
@@ -85,7 +84,6 @@ struct Options {
 pub struct App {
     mode: Mode,
     running_mode: RunningMode,
-    repl_mode: ReplMode,
     options: Options,
     lines: Vec<ReplType>,
     interp: BFInt,
@@ -304,7 +302,7 @@ impl App {
         let horizontal = Layout::horizontal([
             Constraint::Min(0),
             Constraint::Length(9),
-            Constraint::Length(9),
+            Constraint::Length(10),
         ]);
         let [app_name, editing_mode_area, repl_mode_area] = horizontal.areas(area);
 
@@ -316,9 +314,10 @@ impl App {
             Mode::Command => Span::from(" Command ").style(THEME.mode.command),
         }
         .render(editing_mode_area, buf);
-        match self.repl_mode {
-            ReplMode::Running => Span::from(" Running ").style(THEME.mode.editing),
-            ReplMode::Paused => Span::from(" Paused ").style(THEME.mode.normal),
+        match self.interp.state {
+            InterpState::Running => Span::from(" Running  ").style(THEME.mode.editing),
+            InterpState::Finished => Span::from(" Finished ").style(THEME.mode.normal),
+            InterpState::Waiting => Span::from(" Waiting  ").style(THEME.mode.command),
         }
         .render(repl_mode_area, buf);
     }
@@ -348,7 +347,6 @@ fn main() -> io::Result<()> {
     let mut app = App {
         mode: Mode::Normal,
         running_mode: RunningMode::Running,
-        repl_mode: ReplMode::Paused,
         options: Options {
             error_display_time: 2,
             refresh_rate: 60,

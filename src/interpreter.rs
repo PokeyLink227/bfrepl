@@ -1,3 +1,10 @@
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum InterpState {
+    Finished, // pc has reached end of prog
+    Waiting,  // prog is waiting for input
+    Running,  // prog has pending instructions
+}
+
 #[derive(Debug)]
 pub struct BFInt {
     pub prog: Vec<u8>,
@@ -5,6 +12,7 @@ pub struct BFInt {
     pub mem: Vec<u8>,
     pub mem_ptr: usize,
     pub loop_map: Vec<(usize, usize)>,
+    pub state: InterpState,
 }
 
 impl BFInt {
@@ -15,12 +23,17 @@ impl BFInt {
             mem: vec![0; 1000],
             mem_ptr: 0,
             loop_map: Vec::new(),
+            state: InterpState::Finished,
         }
     }
 
     pub fn extend_prog(&mut self, new_prog: &[u8]) {
         self.prog.extend_from_slice(new_prog);
         self.extend_loop_map();
+
+        if self.prog_ptr < self.prog.len() {
+            self.state = InterpState::Running;
+        }
     }
 
     fn extend_loop_map(&mut self) {
@@ -47,7 +60,7 @@ impl BFInt {
     }
 
     pub fn step(&mut self) {
-        if self.prog_ptr >= self.prog.len() {
+        if self.state != InterpState::Running {
             return;
         }
 
@@ -81,6 +94,10 @@ impl BFInt {
             _ => {} // ignore all non-relevant bytes
         }
         self.prog_ptr += 1;
+
+        if self.prog_ptr >= self.prog.len() {
+            self.state = InterpState::Finished;
+        }
     }
 
     pub fn run(&mut self) {
