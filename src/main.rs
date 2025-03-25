@@ -102,11 +102,16 @@ impl Widget for &App {
             Constraint::Length(3),
             Constraint::Length(1),
         ]);
-        let [title_bar, canvas, program_view, bottom_bar] = vertical.areas(area);
+        let [title_bar_area, canvas_area, program_area, bottom_bar_area] = vertical.areas(area);
+        let horizontal =
+            Layout::horizontal([Constraint::Percentage(70), Constraint::Percentage(30)]);
+        let [repl_area, mem_info_area] = horizontal.areas(canvas_area);
+        let vertical = Layout::vertical([Constraint::Percentage(75), Constraint::Percentage(25)]);
+        let [mem_area, info_area] = vertical.areas(mem_info_area);
 
         //Block::new().style(THEME.root).render(area, buf);
 
-        self.render_title_bar(title_bar, buf);
+        self.render_title_bar(title_bar_area, buf);
 
         Paragraph::new(
             self.lines
@@ -122,7 +127,7 @@ impl Widget for &App {
                 .style(THEME.root)
                 .border_type(BorderType::Rounded),
         )
-        .render(canvas, buf);
+        .render(repl_area, buf);
 
         // change to be slice of current program sized ot fit
         Paragraph::new(self.program.as_str())
@@ -134,16 +139,38 @@ impl Widget for &App {
                     .style(THEME.root)
                     .border_type(BorderType::Rounded),
             )
-            .render(program_view, buf);
+            .render(program_area, buf);
+
+        Paragraph::new("0x00")
+            .block(
+                Block::bordered()
+                    .border_style(THEME.root)
+                    .title("Memory")
+                    .title_style(THEME.root)
+                    .style(THEME.root)
+                    .border_type(BorderType::Rounded),
+            )
+            .render(mem_area, buf);
+
+        Paragraph::new("memory usage: 17 bytes (2 pages)")
+            .block(
+                Block::bordered()
+                    .border_style(THEME.root)
+                    .title("Info")
+                    .title_style(THEME.root)
+                    .style(THEME.root)
+                    .border_type(BorderType::Rounded),
+            )
+            .render(info_area, buf);
 
         if self.mode == Mode::Command {
             Line::from(vec![
                 Span::from(":"),
                 Span::from(self.command_field.get_str()),
             ])
-            .render(bottom_bar, buf);
+            .render(bottom_bar_area, buf);
             Span::from("█").render(
-                bottom_bar.offset(Offset {
+                bottom_bar_area.offset(Offset {
                     x: 1 + self.command_field.get_cursor_pos() as i32,
                     y: 0,
                 }),
@@ -152,9 +179,9 @@ impl Widget for &App {
         } else if let Some(_) = self.frames_since_error {
             Span::from(format!("Error: {}", self.error_str))
                 .style(THEME.command_error)
-                .render(bottom_bar, buf);
+                .render(bottom_bar_area, buf);
         } else {
-            self.render_bottom_bar(bottom_bar, buf);
+            self.render_bottom_bar(bottom_bar_area, buf);
         }
     }
 }
